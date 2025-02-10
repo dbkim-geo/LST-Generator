@@ -32,6 +32,7 @@ pip install -r requirements.txt
 ### 3️⃣ GDAL 설치 (Windows)
 GDAL은 별도로 설치해야 합니다.  
 GDAL `.whl` 파일을 다운로드 후 설치하세요.
+GDAL .whl 파일은 [GitHub Releases](https://github.com/user-attachments/files/18733522/GDAL-3.2.3-cp38-cp38-win_amd64.zip) 페이지에서 다운로드, 압축 해제 후 설치하 세요
 
 ```sh
 pip install GDAL-3.2.3-cp38-cp38-win_amd64.whl
