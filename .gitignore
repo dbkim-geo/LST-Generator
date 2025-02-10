@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.swp
+.DS_Store
+
+# Virtual Environment
+venv/
+env/
+lstgen/
+
+# Logs
+logs/
+*.log
+
+# Compiled files
+*.pyc
+
+# Local files
+*.tif
