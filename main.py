@@ -85,6 +85,30 @@ class LSTGeneratorApp:
         clipped_ds = gdal.Warp("", ds, cutlineDSName=shapefile_path, cropToCutline=True, format="VRT")
         return clipped_ds
 
+    def analyze_qa_pixel(value):
+        """
+        QA_PIXEL 값(value)의 16비트 구조를 분석하여 활성화된 비트 정보를 출력하는 함수
+        """
+        bit_info = {
+            0: "Fill (No Data)",
+            1: "Dilated Cloud",
+            3: "Cloud",
+            4: "Cloud Shadow",
+            5: "Snow",
+            6: "Water",
+        }
+
+        binary_value = f"{value:016b}"
+        print(f"QA_PIXEL Value: {value} (Binary: {binary_value})")
+
+        active_bits = [bit_info[i] for i in bit_info if (value & (1 << i)) > 0]
+
+        if active_bits:
+            print("활성화된 비트:", ", ".join(active_bits))
+        else:
+            print("활성화된 비트 없음 (Clear Pixel)")
+        print("-" * 40)
+
 
     def calculate_lst(self):
         try:
@@ -100,6 +124,21 @@ class LSTGeneratorApp:
             band5 = dataset_b5.GetRasterBand(1).ReadAsArray().astype(np.float32)
             band10 = dataset_b10.GetRasterBand(1).ReadAsArray().astype(np.float32)
 
+            # QA Band 로드 및 분석
+            if self.mask_clouds.get() and self.bqa_path.get():
+                dataset_bqa = self.clip_raster(self.bqa_path.get(), self.shapefile_path.get())
+                bqa = dataset_bqa.GetRasterBand(1).ReadAsArray()
+
+                
+                # 🎯 구름 & 구름 그림자만 제거
+                # cloud_mask = ((bqa & (1 << 3)) != 0) | ((bqa & (1 << 5)) != 0) | ((bqa & (1 << 6)) != 0)
+                cloud_mask = ((bqa & (1 << 3)) != 0) | ((bqa & (1 << 5)) != 0)
+                
+                band4[cloud_mask] = np.nan
+                band5[cloud_mask] = np.nan
+                band10[cloud_mask] = np.nan
+                print(f"\n✅ 구름 마스킹 적용 완료 (마스킹된 픽셀 개수: {np.sum(cloud_mask)})")
+
             # MTL 값 가져오기
             ML = self.ml.get()
             AL = self.al.get()
@@ -108,21 +147,24 @@ class LSTGeneratorApp:
 
             # TOA 방사휘도 계산
             L = ML * band10 + AL
+            print(f"\n📊 TOA Radiance 계산 완료 (Min: {np.nanmin(L)}, Max: {np.nanmax(L)})")
 
             # TOA 밝기온도 변환
             T = K2 / np.log((K1 / L) + 1)
+            print(f"\n🔥 TOA Brightness Temperature 계산 완료 (Min: {np.nanmin(T)}, Max: {np.nanmax(T)})")
 
             # NDVI 및 방사율 계산
-            NDVI = np.where((band5 + band4) == 0, 0, (band5 - band4) / (band5 + band4))  # 0으로 나누는 경우 방지
-            NDVI = np.clip(NDVI, -1, 1)  # NDVI 값이 정상 범위 유지
+            NDVI = np.where((band5 + band4) == 0, np.nan, (band5 - band4) / (band5 + band4))
+            NDVI = np.clip(NDVI, -1, 1)
             emissivity = 0.004 * NDVI + 0.986
-        
+            print(f"\n🌱 NDVI 계산 완료 (Min: {np.nanmin(NDVI)}, Max: {np.nanmax(NDVI)})")
+            print(f"🎭 Emissivity 계산 완료 (Min: {np.nanmin(emissivity)}, Max: {np.nanmax(emissivity)})")
+
             # 최종 LST 계산
             LST = T / (1 + (10.9e-6 * T / 1.4388e-2) * np.log(emissivity))
-            
-            # 150 이하의 값은 NaN 처리
             LST[LST <= 150] = np.nan
-            
+            print(f"\n🌡️ LST 계산 완료 (Min: {np.nanmin(LST)}, Max: {np.nanmax(LST)})")
+
             self.result = LST  # 결과 저장
             self.progress.stop()
             self.save_button.config(state=tk.NORMAL)

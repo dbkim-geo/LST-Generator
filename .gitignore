@@ -16,6 +16,9 @@ logs/
 
 # Compiled files
 *.pyc
+dist/
+build/
+*.spec
 
 # Local files
 *.tif
